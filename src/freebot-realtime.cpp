@@ -3,6 +3,7 @@
 #include <thread>
 #include <iostream>
 #include "freebot_messages.h"
+#include "trajectory.h"
 #include <yaml-cpp/yaml.h>
 #include <rbdl/rbdl.h>
 #include <rbdl/rbdl_utils.h>
@@ -12,7 +13,9 @@ void transform_to_position(const RigidBodyDynamics::Math::SpatialTransform &tran
     position->x = transform.r[0];
     position->y = transform.r[1];
     position->z = transform.r[2];
-    //position->ax = transform.E[2,1];
+    auto euler = transform.E.eulerAngles(2,1,2);
+    position->elevation = euler[1];
+    position->az = euler[2];
 }
 
 
@@ -29,6 +32,7 @@ int main(int argc, char **argv) {
 
     MotorPublisher<ArmStatus> pub("arm_status");
     MotorSubscriber<ArmCommand> sub("arm_command");
+    MotorSubscriber<ArmCommandTrajectory> sub_trajectory("arm_command_trajectory");
 
 
     auto start_time = std::chrono::steady_clock::now();
@@ -40,27 +44,44 @@ int main(int argc, char **argv) {
     RigidBodyDynamics::Math::VectorNd Q = RigidBodyDynamics::Math::VectorNd::Zero(model.q_size);
     RigidBodyDynamics::Math::VectorNd QDot = RigidBodyDynamics::Math::VectorNd::Zero(model.q_size);
     RigidBodyDynamics::Math::VectorNd QDDot = RigidBodyDynamics::Math::VectorNd::Zero(model.q_size);
+    Q[3] = -M_PI/2;
     UpdateKinematics(model, Q, QDot, QDDot);
     Position current_model_position = {};
     transform_to_position(model.X_base[model.mBodyNameMap[control_body]], &current_model_position);
     position = current_model_position;
     Eigen::VectorXd dx(6);
     dx.setZero();
+    int last_command_num = 0;
+    Trajectory trajectory;
     while(1) {
         count++;
-        ArmCommand command = sub.read();
+        ArmCommand command = sub.read();        
         Velocity &velocity = command.velocity;
+        ArmCommandTrajectory command_trajectory = sub_trajectory.read();
+        if (command_trajectory.command_num != last_command_num) {
+            last_command_num = command_trajectory.command_num;
+            trajectory.start(command_trajectory.position_trajectory, position, velocity, next_time);
+        }
 
-        std::cout << position.x << std::endl;
+        Position position_trajectory = trajectory.get_trajectory_position(next_time);
 
-        position.x += .001*velocity.x;
-        position.y += .001*velocity.y;
-        position.z += .001*velocity.z;
-        position.ax += .001*velocity.ax;
-        position.az += .001*velocity.az;
+        //std::cout << model.X_base[model.mBodyNameMap[control_body]] << std::endl << std::endl;
+
+        // requires some custom logic to deal with easy control in a 5 dof arm
+        // if elevation is -90, az is in task space, else it will be just joint angle j4, az_offset is set to create no movement when transitioning 
+        // a trajectory will result in az_offset of 0 
+
+        position.x += .001*velocity.x + position_trajectory.x;
+        position.y += .001*velocity.y + position_trajectory.y;
+        position.z += .001*velocity.z + position_trajectory.z;
+        position.elevation += .001*velocity.elevation + position_trajectory.elevation;
+        position.az += .001*velocity.az + position_trajectory.az;
 
         UpdateKinematics(model, Q, QDot, QDDot);
         transform_to_position(model.X_base[model.mBodyNameMap[control_body]], &current_model_position);
+        // dx[0] = position.ax - current_model_position.ax;
+        // dx[1] = position.ay - current_model_position.ay;
+        //dx[2] = position.az - current_model_position.az;
         dx[3] = position.x - current_model_position.x;
         dx[4] = position.y - current_model_position.y;
         dx[5] = position.z - current_model_position.z;
@@ -68,12 +89,20 @@ int main(int argc, char **argv) {
         Eigen::MatrixXd J(6,model.q_size); 
         J.setZero();
         CalcBodySpatialJacobian(model, Q, model.mBodyNameMap[control_body], J);
+        Eigen::MatrixXd J2(6,model.q_size); 
+        J2.setZero();
+        Eigen::Vector3d point = {0,0,0};
+        CalcPointJacobian6D(model, Q, model.mBodyNameMap[control_body], point, J2);
+
+        //std::cout << J << std::endl << J2 << std::endl << std::endl;
         //Jcart=J
      //   std::cout << J << std::endl;
         // todo goal is to use Jtranspose and impedance control using joint torque, for now though position with Jinv
         Eigen::MatrixXd Jinv = J.completeOrthogonalDecomposition().pseudoInverse(); // todo look at least squares
      //   std::cout << Jinv << std::endl;
-        Q += .1*Jinv*dx;
+       // Eigen::VectorXd dQ = Jinv*dx;
+        Eigen::VectorXd dQ = J2.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(dx);
+        Q += .1*dQ;
 
         for (int i=0; i<model.q_size; i++) {
             status.command.joint_position[i] = Q[i];
