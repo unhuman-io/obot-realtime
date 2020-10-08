@@ -3,11 +3,17 @@
 #include <thread>
 #include <iostream>
 #include "freebot_messages.h"
-#include "trajectory.h"
+
 #include <yaml-cpp/yaml.h>
 #include <rbdl/rbdl.h>
 #include <rbdl/rbdl_utils.h>
 #include <rbdl/addons/urdfreader/urdfreader.h>
+
+std::ostream& operator<< (std::ostream& stream, const Position& p) {
+    stream << "x: " << p.x << ", y: " << p.y << ", z: " << p.z << ", el: " << p.elevation << ", az: " << p.az;
+    return stream;
+}
+#include "trajectory.h"
 
 void transform_to_position(const RigidBodyDynamics::Math::SpatialTransform &transform, Position * const position) {
     position->x = transform.r[0];
@@ -49,10 +55,12 @@ int main(int argc, char **argv) {
     Position current_model_position = {};
     transform_to_position(model.X_base[model.mBodyNameMap[control_body]], &current_model_position);
     position = current_model_position;
+    std::cout << position << std::endl;
     Eigen::VectorXd dx(6);
     dx.setZero();
-    int last_command_num = 0;
+    int last_command_num = -1;
     Trajectory trajectory;
+    Position position_sum = {};
     while(1) {
         count++;
         ArmCommand command = sub.read();        
@@ -60,22 +68,31 @@ int main(int argc, char **argv) {
         ArmCommandTrajectory command_trajectory = sub_trajectory.read();
         if (command_trajectory.command_num != last_command_num) {
             last_command_num = command_trajectory.command_num;
+            std::cout << "trajectory " << last_command_num << " received" << std::endl;
             trajectory.start(command_trajectory.position_trajectory, position, velocity, next_time);
+            position_sum = {};
+            for (int i=0; i<command_trajectory.position_trajectory.num_points; i++) {
+                std::cout << command_trajectory.position_trajectory.trajectory_point[i].position << std::endl;
+            }
         }
 
         Position position_trajectory = trajectory.get_trajectory_position(next_time);
+        //std::cout << position_trajectory << std::endl;
 
         //std::cout << model.X_base[model.mBodyNameMap[control_body]] << std::endl << std::endl;
 
         // requires some custom logic to deal with easy control in a 5 dof arm
         // if elevation is -90, az is in task space, else it will be just joint angle j4, az_offset is set to create no movement when transitioning 
         // a trajectory will result in az_offset of 0 
+        position_sum.x += .001*velocity.x;
+        position_sum.y += .001*velocity.y;
+        position_sum.z += .001*velocity.z;
 
-        position.x += .001*velocity.x + position_trajectory.x;
-        position.y += .001*velocity.y + position_trajectory.y;
-        position.z += .001*velocity.z + position_trajectory.z;
-        position.elevation += .001*velocity.elevation + position_trajectory.elevation;
-        position.az += .001*velocity.az + position_trajectory.az;
+        position.x = position_sum.x + position_trajectory.x;
+        position.y = position_sum.y + position_trajectory.y;
+        position.z = position_sum.z + position_trajectory.z;
+        position.elevation += .001*velocity.elevation;// + position_trajectory.elevation;
+        position.az += .001*velocity.az;// + position_trajectory.az;
 
         UpdateKinematics(model, Q, QDot, QDDot);
         transform_to_position(model.X_base[model.mBodyNameMap[control_body]], &current_model_position);

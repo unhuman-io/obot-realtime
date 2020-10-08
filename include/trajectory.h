@@ -4,6 +4,7 @@
 #include <limits>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 
 double sign(double d) {
@@ -63,6 +64,8 @@ TrajectoryCoeffs calc_trapezoidal_coeffs(double p0, double p3, double amax, doub
         c.t2 = c.t1 + xtrap/vsat;
         c.t3 = c.t3 - 2*tp + c.t1 + c.t2;
     }
+    std::cout << c.t1 << std::endl;
+    return c;
 }
 
 TrajectoryState get_trajectory_values(const TrajectoryCoeffs &c, double t) {
@@ -90,18 +93,32 @@ class Trajectory {
         time_start_ = time;
         Position tmp_position = current_position;
         Velocity tmp_velocity = current_velocity;
-        for (int i=0; i<trajectory.num_points; i++) {
+        num_points_ = trajectory.num_points;
+        for (int i=0; i<num_points_; i++) {
             trajectory_coeffs_[i] = calculate_coeffs(tmp_position, tmp_velocity, trajectory.trajectory_point[i]);
             tmp_position = trajectory.trajectory_point[i].position;
             tmp_velocity = trajectory.trajectory_point[i].velocity;
+            std::cout << trajectory.trajectory_point[i].position << std::endl;
+        }
+        for (int i=1; i<num_points_; i++) {
+            trajectory_coeffs_[i].t_start = trajectory_coeffs_[i-1].t_start + trajectory_coeffs_[i-1].t3_max;
         }
     }
     Position get_trajectory_position(const std::chrono::time_point<std::chrono::steady_clock> &time) {
-        TrajectoryCoeffs &c = trajectory_coeffs_[trajectory_coeff_index(time)];        
+        TrajectoryCoeffStruct &c = trajectory_coeffs_[trajectory_coeff_index(time)];        
         auto t = trajectory_index_time(time);
+        //std::cout << "t: " << t << ", ";
         Position p = {};
-        auto s = get_trajectory_values(c, t);
-        //p.x = s.x;
+        auto s = get_trajectory_values(c.x, t);
+        p.x = s.x;
+        s = get_trajectory_values(c.y, t);
+        p.y = s.x;
+        s = get_trajectory_values(c.z, t);
+        p.z = s.x;
+        s = get_trajectory_values(c.elevation, t);
+        p.elevation = s.x;
+        s = get_trajectory_values(c.az, t);
+        p.az = s.x;
         return p;
     }
     Velocity get_trajectory_velocity(const std::chrono::time_point<std::chrono::steady_clock> &time) {
@@ -110,25 +127,41 @@ class Trajectory {
     }
     // find which trajectory segment that time is in
     int trajectory_coeff_index(const std::chrono::time_point<std::chrono::steady_clock> &time) {
-        return 0;
+        int index = 0;
+        double t3_sum = 0;
+        for (int i=0; i<num_points_; i++) {
+            if (trajectory_time(time) > t3_sum) {
+                t3_sum += trajectory_coeffs_[i].t3_max;
+                index = i;
+            }
+        }
+        return index;
     }
     double trajectory_time(const std::chrono::time_point<std::chrono::steady_clock> &time) {
         std::chrono::duration<double> seconds = time - time_start_;
         return seconds.count();
     }
     double trajectory_index_time(const std::chrono::time_point<std::chrono::steady_clock> &time) {
-        return trajectory_time(time) - trajectory_time_points_[trajectory_coeff_index(time)];
+        return trajectory_time(time) - trajectory_coeffs_[trajectory_coeff_index(time)].t_start;
     }
  private:
-    TrajectoryCoeffs trajectory_coeffs_[POSITION_TRAJECTORY_MAX_POINTS];
-    double trajectory_time_points_[POSITION_TRAJECTORY_MAX_POINTS];
-
+    struct TrajectoryCoeffStruct {
+        TrajectoryCoeffs x, y, z, elevation, az;
+        double t3_max;
+        double t_start;
+    } trajectory_coeffs_[POSITION_TRAJECTORY_MAX_POINTS] = {};
+    int num_points_ = 0;
     // calculates a trapezoidal trajectory
-    TrajectoryCoeffs calculate_coeffs(const Position &position, const Velocity &velocity, const PositionTrajectory::TrajectoryPoint &trajectory_point) {
-        TrajectoryCoeffs c;
-        // first calculate a pyramid velocity function. If it exceeds max velocity, then switch to trapezoidal
-
-        c.a = 1;
+    TrajectoryCoeffStruct calculate_coeffs(const Position &position, const Velocity &velocity, const PositionTrajectory::TrajectoryPoint &trajectory_point) {
+        TrajectoryCoeffStruct s;
+        s.x = calc_trapezoidal_coeffs(position.x, trajectory_point.position.x, 1);
+        s.y = calc_trapezoidal_coeffs(position.y, trajectory_point.position.y, 1);
+        s.z = calc_trapezoidal_coeffs(position.z, trajectory_point.position.z, 1);
+        s.elevation = calc_trapezoidal_coeffs(position.elevation, trajectory_point.position.elevation, 1);
+        s.az = calc_trapezoidal_coeffs(position.az, trajectory_point.position.az, 1);
+        s.t3_max = std::max(s.x.t3, std::max(s.y.t3, std::max(s.z.t3, std::max(s.elevation.t3, s.az.t3))));
+        s.t3_max = std::max(s.x.t3, std::max(s.y.t3, s.z.t3));
+        return s;
     }
 
     std::chrono::time_point<std::chrono::steady_clock> time_start_;
