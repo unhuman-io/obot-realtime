@@ -33,12 +33,12 @@ TrajectoryCoeffs calc_trapezoidal_coeffs(double p0, double p3, double amax, doub
     double t3sol = std::numeric_limits<double>::infinity();
     for (auto a : {amax, -amax} ) {
         double s = 4*v0*v0 + 4*(dp*a + .5*(v0+v3)*dv);
-        if (s > 0) {
+        if (s >= 0) {
             for (double q : {-1, 1}) {
                 double t1 = (-2*v0 + q*std::sqrt(s))*.5*a;
-                if (t1 > 0) {
+                if (t1 >= 0) {
                     double t3 = 2*t1 - dv/a;
-                    if (t3 > 0) {
+                    if (t3 >= 0) {
                         if (t3 < t3sol) {
                             t3sol = t3;
                             c.t1 = t1;
