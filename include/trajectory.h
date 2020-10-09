@@ -72,7 +72,7 @@ TrajectoryCoeffs calc_trapezoidal_coeffs(double p0, double p3, double amax, doub
         c.t2 = c.t1 + xtrap/vsat;
         c.t3 = c.t3 - 2*tp + c.t1 + c.t2;
     }
-    std::cout << c << std::endl;
+    //std::cout << c << std::endl;
     return c;
 }
 
@@ -126,7 +126,7 @@ TrajectoryCoeffs calc_trapezoidal_coeffs_time(double p0, double p3, double amax,
             }
         }
     }
-    std::cout << c << std::endl;
+    //std::cout << c << std::endl;
     return c;
 }
 
@@ -160,8 +160,8 @@ class Trajectory {
             trajectory_coeffs_[i] = calculate_coeffs(tmp_position, tmp_velocity, trajectory.trajectory_point[i]);
             tmp_position = trajectory.trajectory_point[i].position;
             tmp_velocity = trajectory.trajectory_point[i].velocity;
-            std::cout << trajectory.trajectory_point[i].position << std::endl;
-            std::cout << "v" << trajectory.trajectory_point[i].velocity << std::endl;
+            //std::cout << trajectory.trajectory_point[i].position << std::endl;
+            //std::cout << trajectory.trajectory_point[i].velocity << std::endl;
         }
         for (int i=1; i<num_points_; i++) {
             trajectory_coeffs_[i].t_start = trajectory_coeffs_[i-1].t_start + trajectory_coeffs_[i-1].t3_max;
