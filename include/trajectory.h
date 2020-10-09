@@ -42,11 +42,12 @@ TrajectoryCoeffs calc_trapezoidal_coeffs(double p0, double p3, double amax, doub
         double s = 4*v0*v0 + 4*(dp*a + .5*(v0+v3)*dv);
         if (s >= 0) {
             for (double q : {-1, 1}) {
-                double t1 = (-2*v0 + q*std::sqrt(s))*.5*a;
+                double t1 = (-2*v0 + q*std::sqrt(s))*.5/a;
                 if (t1 >= 0) {
                     double t3 = 2*t1 - dv/a;
                     if (t3 >= 0 && t3 >= t1) {
                         if (t3 < t3sol) {
+                           // std::cout << "s: " << s << ", q; " << q << std::endl; 
                             t3sol = t3;
                             c.t1 = t1;
                             c.t3 = t3;
@@ -72,7 +73,7 @@ TrajectoryCoeffs calc_trapezoidal_coeffs(double p0, double p3, double amax, doub
         c.t2 = c.t1 + xtrap/vsat;
         c.t3 = c.t3 - 2*tp + c.t1 + c.t2;
     }
-    //std::cout << c << std::endl;
+    std::cout << c << std::endl;
     return c;
 }
 
@@ -126,7 +127,7 @@ TrajectoryCoeffs calc_trapezoidal_coeffs_time(double p0, double p3, double amax,
             }
         }
     }
-    //std::cout << c << std::endl;
+    std::cout << c << std::endl;
     return c;
 }
 
@@ -220,13 +221,15 @@ class Trajectory {
         s.x = calc_trapezoidal_coeffs(position.x, trajectory_point.position.x, 1, velocity.x, trajectory_point.velocity.x);
         s.y = calc_trapezoidal_coeffs(position.y, trajectory_point.position.y, 1, velocity.y, trajectory_point.velocity.y);
         s.z = calc_trapezoidal_coeffs(position.z, trajectory_point.position.z, 1, velocity.z, trajectory_point.velocity.z);
-        s.elevation = calc_trapezoidal_coeffs(position.elevation, trajectory_point.position.elevation, 1);
-        s.az = calc_trapezoidal_coeffs(position.az, trajectory_point.position.az, 1);
-        s.t3_max = std::max(s.x.t3, std::max(s.y.t3, std::max(s.z.t3, std::max(s.elevation.t3, s.az.t3))));
-        s.t3_max = std::max(s.x.t3, std::max(s.y.t3, s.z.t3)) + .0001;
+        s.elevation = calc_trapezoidal_coeffs(position.elevation, trajectory_point.position.elevation, 5);
+        s.az = calc_trapezoidal_coeffs(position.az, trajectory_point.position.az, 5);
+        s.t3_max = std::max(s.x.t3, std::max(s.y.t3, std::max(s.z.t3, std::max(s.elevation.t3, s.az.t3)))) + .0001;
+        //s.t3_max = std::max(s.x.t3, std::max(s.y.t3, s.z.t3)) + .0001;
         s.x = calc_trapezoidal_coeffs_time(position.x, trajectory_point.position.x, 1, s.t3_max, velocity.x, trajectory_point.velocity.x);
         s.y = calc_trapezoidal_coeffs_time(position.y, trajectory_point.position.y, 1, s.t3_max, velocity.y, trajectory_point.velocity.y);
         s.z = calc_trapezoidal_coeffs_time(position.z, trajectory_point.position.z, 1, s.t3_max, velocity.z, trajectory_point.velocity.z);
+        s.elevation = calc_trapezoidal_coeffs_time(position.elevation, trajectory_point.position.elevation, 5, s.t3_max, velocity.elevation, trajectory_point.velocity.elevation);
+        s.az = calc_trapezoidal_coeffs_time(position.az, trajectory_point.position.az, 5, s.t3_max, velocity.az, trajectory_point.velocity.az);
         return s;
     }
 

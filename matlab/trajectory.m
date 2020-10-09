@@ -1,12 +1,12 @@
 % checking the math for the trapezoidal trajectory
 
-amax = 2;
+amax = 5;
 vmax = 2;
-p0 = 0;
-p3 = 0;
+p0 = 0.05;
+p3 = .3;
 v0 = 0;
 v3 = 0;
-t3d = t3+.001;
+t3d = 0;%t3+.001;
 
 v0 = min(max(v0,-vmax),vmax);
 v3 = min(max(v3,-vmax),vmax);
@@ -21,13 +21,13 @@ c.v0 = v0;
 c.p0 = p0;
 t3sol = inf;
 for a = [-amax,amax]
-    s = 4*v0^2 + 4*(dp*a+(v0+v3)*dv/2);
+    s = 4*v0^2 + 4*(dp*a+(v0+v3)*dv/2)
     if (s > 0)
         for q = [-1,1]        
             t1 = (-2*v0 + q*sqrt(s))/2/a;
-            if (t1 > 0)
+            if (t1 >= 0)
                 t3 = 2*t1-dv/a;
-                if (t3 > 0 && t3 > t1)
+                if (t3 >= 0 && t3 >= t1)
                     if (t3 < t3sol)
                         t3sol = t3;
                         c.t1 = t1;

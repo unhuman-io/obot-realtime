@@ -95,12 +95,14 @@ int main(int argc, char **argv) {
         position_sum.x += .001*velocity.x;
         position_sum.y += .001*velocity.y;
         position_sum.z += .001*velocity.z;
+        position_sum.elevation += .001*velocity.elevation;
+        position_sum.az += .001*velocity.az;
 
         position.x = position_sum.x + position_trajectory.x;
         position.y = position_sum.y + position_trajectory.y;
         position.z = position_sum.z + position_trajectory.z;
-        position.elevation += .001*velocity.elevation;// + position_trajectory.elevation;
-        position.az += .001*velocity.az;// + position_trajectory.az;
+        position.elevation = position_sum.elevation + position_trajectory.elevation;
+        position.az = position_sum.az + position_trajectory.az;
 
         UpdateKinematics(model, Q, QDot, QDDot);
         transform_to_position(model.X_base[model.mBodyNameMap[control_body]], &current_model_position);
@@ -128,9 +130,12 @@ int main(int argc, char **argv) {
        // Eigen::VectorXd dQ = Jinv*dx;
         Eigen::VectorXd dQ = J2.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(dx);
         Q += .1*dQ;
+        auto Q2 = Q;
+        Q2[3] += position.elevation;
+        Q2[4] = position.az;
 
         for (int i=0; i<model.q_size; i++) {
-            status.command.joint_position[i] = Q[i];
+            status.command.joint_position[i] = Q2[i];
         }
 
         pub.publish(status);
