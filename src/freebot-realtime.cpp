@@ -63,8 +63,9 @@ int main(int argc, char **argv) {
     std::cout << position << std::endl;
     Eigen::VectorXd dx(6);
     dx.setZero();
-    int last_command_num = -1;
+    int last_command_num = 0;
     Trajectory trajectory;
+    Position position_trajectory = position;
     Position position_sum = {};
     while(1) {
         count++;
@@ -80,8 +81,10 @@ int main(int argc, char **argv) {
             //     std::cout << command_trajectory.position_trajectory.trajectory_point[i].position << std::endl;
             // }
         }
-
-        Position position_trajectory = trajectory.get_trajectory_position(next_time);
+        
+        if (command_trajectory.command_num) {
+            position_trajectory = trajectory.get_trajectory_position(next_time);
+        }
         //std::cout << position_trajectory << std::endl;
 
         //std::cout << model.X_base[model.mBodyNameMap[control_body]] << std::endl << std::endl;
