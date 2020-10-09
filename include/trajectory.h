@@ -14,16 +14,23 @@ double sign(double d) {
     return -1;
 }
 
+
+
 struct TrajectoryCoeffs {
-    double a, t1, t2, t3, p0, v0;
+    double a1, a2, t1, t2, t3, p0, v0;
 };
+
+std::ostream& operator<< (std::ostream& stream, const TrajectoryCoeffs& c) {
+    stream << "a1: " << c.a1 << ", a2: " << c.a2 << ", t1: " << c.t1 << ", t2: " << c.t2 <<  ", t3: " << c.t3 << ", p0: " << c.p0 <<  ", v0: " << c.v0;
+    return stream;
+}
 
 struct TrajectoryState {
     double x, v;
 };
 
-TrajectoryCoeffs calc_trapezoidal_coeffs(double p0, double p3, double amax, double vmax=std::numeric_limits<double>::infinity(), double v0=0, double v3=0) {
-    TrajectoryCoeffs c;
+TrajectoryCoeffs calc_trapezoidal_coeffs(double p0, double p3, double amax, double v0=0, double v3=0, double vmax=std::numeric_limits<double>::infinity()) {
+    TrajectoryCoeffs c = {};
     v0 = std::min(std::max(v0,-vmax), vmax);
     v3 = std::min(std::max(v3,-vmax), vmax);
     double dp = p3-p0;
@@ -38,12 +45,13 @@ TrajectoryCoeffs calc_trapezoidal_coeffs(double p0, double p3, double amax, doub
                 double t1 = (-2*v0 + q*std::sqrt(s))*.5*a;
                 if (t1 >= 0) {
                     double t3 = 2*t1 - dv/a;
-                    if (t3 >= 0) {
+                    if (t3 >= 0 && t3 >= t1) {
                         if (t3 < t3sol) {
                             t3sol = t3;
                             c.t1 = t1;
                             c.t3 = t3;
-                            c.a = a;
+                            c.a1 = a;
+                            c.a2 = -a;
                         }
                     }
                 }
@@ -51,20 +59,74 @@ TrajectoryCoeffs calc_trapezoidal_coeffs(double p0, double p3, double amax, doub
         }
     }
 
-    if (std::abs(c.v0+c.a*c.t1) < vmax) {
+    if (std::abs(c.v0+c.a1*c.t1) < vmax) {
         // pyramid velocity
         c.t2 = c.t1;
     } else {
         // trapezoid velocity
-        double q = sign(c.v0+c.a*c.t1);
+        double q = sign(c.v0+c.a1*c.t1);
         double vsat = q*vmax;
         double tp = c.t1;
-        c.t1 = (vsat - v0)/c.a;
-        double xtrap = 2*(tp-c.t1)*(vsat+.5*c.a*(tp-c.t1));
+        c.t1 = (vsat - v0)/c.a1;
+        double xtrap = 2*(tp-c.t1)*(vsat+.5*c.a1*(tp-c.t1));
         c.t2 = c.t1 + xtrap/vsat;
         c.t3 = c.t3 - 2*tp + c.t1 + c.t2;
     }
-    std::cout << c.t1 << std::endl;
+    std::cout << c << std::endl;
+    return c;
+}
+
+std::vector<double> quadratic_positive(double a, double b, double c) {
+    std::vector<double> sol;
+    if (a == 0) {
+        sol.push_back(-c/b);
+    } else {
+        auto s = b*b - 4*a*c;
+        if (s > 0) {
+            for (double q : {-1, 1}) {
+                auto s2 = (-b + q*sqrt(s))/2/a;
+                if (s2 > 0) {
+                    sol.push_back(s2);
+                }
+            }
+        }
+    }
+    return sol;
+}
+
+// compute for end time, keeping a at amax, now can have various combinations of amax, always at beginning and end
+// other combinations are possible though
+TrajectoryCoeffs calc_trapezoidal_coeffs_time(double p0, double p3, double amax, double t3, double v0=0, double v3=0) {
+    TrajectoryCoeffs c = {};
+    double dp = p3-p0;
+    double dv = v3-v0;
+    c.v0 = v0;
+    c.p0 = p0;
+    c.t3 = t3;
+    int sols = 0;
+    for (auto a1 : {amax, -amax} ) {
+        for (auto a2 : {amax, -amax} ) {
+            double a = .5*a1*(-1 + a1/a2);
+            double b = a1*(t3 - dv/a2);
+            double cc = v0*t3 + .5*dv*dv/a2 - dp;
+            for (auto t1 : quadratic_positive(a, b, cc)) {
+                if (t1 > 0) {
+                    auto t2 = -(dv-a1*t1)/a2+t3;
+                    if (t2 >= t1 && t2 <= t3) {
+                        sols++;
+                        if (sols > 1) {
+                            std::cerr << "too many solutions" << std::endl;
+                        }
+                        c.t1 = t1;
+                        c.t2 = t2;
+                        c.a1 = a1;
+                        c.a2 = a2;
+                    }
+                }
+            }
+        }
+    }
+    std::cout << c << std::endl;
     return c;
 }
 
@@ -74,14 +136,14 @@ TrajectoryState get_trajectory_values(const TrajectoryCoeffs &c, double t) {
         t = c.t3;
     }
     if (t < c.t1) {
-        s.x = c.p0 + c.v0*t + .5*c.a*t*t;
-        s.v = c.v0 + c.a*t;
+        s.x = c.p0 + c.v0*t + .5*c.a1*t*t;
+        s.v = c.v0 + c.a1*t;
     } else if (t < c.t2) {
-        s.x = c.p0 + c.v0*c.t1 + .5*c.a*c.t1*c.t1 + (c.v0 + c.a*c.t1)*(t-c.t1);
-        s.v = c.v0 + c.a*c.t1;
+        s.x = c.p0 + c.v0*c.t1 + .5*c.a1*c.t1*c.t1 + (c.v0 + c.a1*c.t1)*(t-c.t1);
+        s.v = c.v0 + c.a1*c.t1;
     } else {
-        s.x = c.p0 + c.v0*c.t1 + .5*c.a*c.t1*c.t1 + (c.v0 + c.a*c.t1)*(t-c.t1) - .5*c.a*(t-c.t2)*(t-c.t2);
-        s.v = c.v0 + c.a*c.t1 - c.a*(t-c.t2);
+        s.x = c.p0 + c.v0*c.t1 + .5*c.a1*c.t1*c.t1 + (c.v0 + c.a1*c.t1)*(t-c.t1) + .5*c.a2*(t-c.t2)*(t-c.t2);
+        s.v = c.v0 + c.a1*c.t1 - c.a2*(t-c.t2);
     }
     return s;
 }
@@ -99,6 +161,7 @@ class Trajectory {
             tmp_position = trajectory.trajectory_point[i].position;
             tmp_velocity = trajectory.trajectory_point[i].velocity;
             std::cout << trajectory.trajectory_point[i].position << std::endl;
+            std::cout << "v" << trajectory.trajectory_point[i].velocity << std::endl;
         }
         for (int i=1; i<num_points_; i++) {
             trajectory_coeffs_[i].t_start = trajectory_coeffs_[i-1].t_start + trajectory_coeffs_[i-1].t3_max;
@@ -154,13 +217,16 @@ class Trajectory {
     // calculates a trapezoidal trajectory
     TrajectoryCoeffStruct calculate_coeffs(const Position &position, const Velocity &velocity, const PositionTrajectory::TrajectoryPoint &trajectory_point) {
         TrajectoryCoeffStruct s;
-        s.x = calc_trapezoidal_coeffs(position.x, trajectory_point.position.x, 1);
-        s.y = calc_trapezoidal_coeffs(position.y, trajectory_point.position.y, 1);
-        s.z = calc_trapezoidal_coeffs(position.z, trajectory_point.position.z, 1);
+        s.x = calc_trapezoidal_coeffs(position.x, trajectory_point.position.x, 1, velocity.x, trajectory_point.velocity.x);
+        s.y = calc_trapezoidal_coeffs(position.y, trajectory_point.position.y, 1, velocity.y, trajectory_point.velocity.y);
+        s.z = calc_trapezoidal_coeffs(position.z, trajectory_point.position.z, 1, velocity.z, trajectory_point.velocity.z);
         s.elevation = calc_trapezoidal_coeffs(position.elevation, trajectory_point.position.elevation, 1);
         s.az = calc_trapezoidal_coeffs(position.az, trajectory_point.position.az, 1);
         s.t3_max = std::max(s.x.t3, std::max(s.y.t3, std::max(s.z.t3, std::max(s.elevation.t3, s.az.t3))));
-        s.t3_max = std::max(s.x.t3, std::max(s.y.t3, s.z.t3));
+        s.t3_max = std::max(s.x.t3, std::max(s.y.t3, s.z.t3)) + .0001;
+        s.x = calc_trapezoidal_coeffs_time(position.x, trajectory_point.position.x, 1, s.t3_max, velocity.x, trajectory_point.velocity.x);
+        s.y = calc_trapezoidal_coeffs_time(position.y, trajectory_point.position.y, 1, s.t3_max, velocity.y, trajectory_point.velocity.y);
+        s.z = calc_trapezoidal_coeffs_time(position.z, trajectory_point.position.z, 1, s.t3_max, velocity.z, trajectory_point.velocity.z);
         return s;
     }
 

@@ -13,6 +13,11 @@ std::ostream& operator<< (std::ostream& stream, const Position& p) {
     stream << "x: " << p.x << ", y: " << p.y << ", z: " << p.z << ", el: " << p.elevation << ", az: " << p.az;
     return stream;
 }
+
+std::ostream& operator<< (std::ostream& stream, const Velocity& v) {
+    stream << "vx: " << v.x << ", vy: " << v.y << ", vz: " << v.z << ", vel: " << v.elevation << ", vaz: " << v.az;
+    return stream;
+}
 #include "trajectory.h"
 
 void transform_to_position(const RigidBodyDynamics::Math::SpatialTransform &transform, Position * const position) {
@@ -71,9 +76,9 @@ int main(int argc, char **argv) {
             std::cout << "trajectory " << last_command_num << " received" << std::endl;
             trajectory.start(command_trajectory.position_trajectory, position, velocity, next_time);
             position_sum = {};
-            for (int i=0; i<command_trajectory.position_trajectory.num_points; i++) {
-                std::cout << command_trajectory.position_trajectory.trajectory_point[i].position << std::endl;
-            }
+            // for (int i=0; i<command_trajectory.position_trajectory.num_points; i++) {
+            //     std::cout << command_trajectory.position_trajectory.trajectory_point[i].position << std::endl;
+            // }
         }
 
         Position position_trajectory = trajectory.get_trajectory_position(next_time);
