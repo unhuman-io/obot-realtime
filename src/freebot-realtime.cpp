@@ -3,6 +3,7 @@
 #include <thread>
 #include <iostream>
 #include "freebot_messages.h"
+#include <motor_manager.h>
 
 #include <yaml-cpp/yaml.h>
 #include <rbdl/rbdl.h>
@@ -40,10 +41,14 @@ int main(int argc, char **argv) {
         std::cerr << "Error loading model " << model_urdf_file << std::endl;
         abort();
     }
+    auto motor_names = config["motors"].as<std::vector<std::string>>();
 
     MotorPublisher<ArmStatus> pub("arm_status");
     MotorSubscriber<ArmCommand> sub("arm_command");
     MotorSubscriber<ArmCommandTrajectory> sub_trajectory("arm_command_trajectory");
+
+    MotorManager m;
+    m.get_motors_by_name(motor_names);
 
 
     auto start_time = std::chrono::steady_clock::now();
@@ -55,12 +60,20 @@ int main(int argc, char **argv) {
     RigidBodyDynamics::Math::VectorNd Q = RigidBodyDynamics::Math::VectorNd::Zero(model.q_size);
     RigidBodyDynamics::Math::VectorNd QDot = RigidBodyDynamics::Math::VectorNd::Zero(model.q_size);
     RigidBodyDynamics::Math::VectorNd QDDot = RigidBodyDynamics::Math::VectorNd::Zero(model.q_size);
-    Q[3] = -M_PI/2;
+
+    auto motor_status = m.read();
+    for (int i=0; i<motor_status.size(); i++) {
+        Q[i] = motor_status[i].motor_position/100;
+        if(i==0) Q[i] = -Q[i]+M_PI/2;
+        std::cout << Q[i] << std::endl;
+    }
+//    Q[3] = -M_PI/2;
     UpdateKinematics(model, Q, QDot, QDDot);
     Position current_model_position = {};
     transform_to_position(model.X_base[model.mBodyNameMap[control_body]], &current_model_position);
     position = current_model_position;
     std::cout << position << std::endl;
+    std::cout << Q << std::endl;
     Eigen::VectorXd dx(6);
     dx.setZero();
     int last_command_num = 0;
@@ -69,6 +82,9 @@ int main(int argc, char **argv) {
     Position position_sum = {};
     while(1) {
         count++;
+        m.poll();
+        auto motor_status = m.read();
+        //std::cout << motor_status << std::endl;
         ArmCommand command = sub.read();        
         Velocity &velocity = command.velocity;
         ArmCommandTrajectory command_trajectory = sub_trajectory.read();
@@ -137,6 +153,27 @@ int main(int argc, char **argv) {
         for (int i=0; i<model.q_size; i++) {
             status.command.joint_position[i] = Q2[i];
         }
+
+        for (int i=0; i<motor_status.size(); i++) {
+            status.measured.joint_position[i] = motor_status[i].motor_position/100;
+            if(i==0) status.measured.joint_position[i] = -status.measured.joint_position[i];
+        }
+
+        std::vector<float> motor_desired(m.motors().size());
+        for (int i=0; i<m.motors().size(); i++) {
+            float tmp = status.command.joint_position[i];
+            if (i==0) tmp = M_PI/2 - tmp;
+            tmp *= 100;
+            if (fabs(tmp - motor_status[i].motor_position) < 10) {
+                motor_desired[i] = tmp;
+            } else {
+                motor_desired[i] = motor_status[i].motor_position;
+            }
+        }
+        m.set_command_mode(POSITION);
+        m.set_command_count(count);
+        m.set_command_position(motor_desired);
+        m.write_saved_commands();
 
         pub.publish(status);
         next_time += std::chrono::microseconds(1000);

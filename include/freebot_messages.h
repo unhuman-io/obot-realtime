@@ -37,4 +37,7 @@ struct ArmStatus {
         Position position;
         ArmJointPosition joint_position;
     } command;
+    struct {
+        ArmJointPosition joint_position;
+    } measured;
 };
