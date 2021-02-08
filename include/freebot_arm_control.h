@@ -6,6 +6,7 @@
 class FreebotArmControl {
  public:
     FreebotArmControl(std::string model_urdf_file, std::string control_body_name);
+    void init(Eigen::VectorXd q);
     Eigen::VectorXd step(Position desired_position);
 
  private:

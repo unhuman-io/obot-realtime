@@ -20,6 +20,14 @@ std::ostream& operator<< (std::ostream& stream, const Velocity& v) {
 #include "trajectory.h"
 
 
+Eigen::VectorXd read_yaml_vector(YAML::Node node) {
+    auto tmp = node.as<std::vector<double>>();
+    Eigen::VectorXd out(tmp.size());
+    for (int i=0; i<tmp.size(); i++) {
+        out[i] = tmp[i];
+    }
+    return out;
+}
 
 
 int main(int argc, char **argv) {
@@ -28,13 +36,22 @@ int main(int argc, char **argv) {
     FreebotArmControl arm_control(config["arm"]["model"].as<std::string>(), config["arm"]["control_body"].as<std::string>());
 
     auto motor_names = config["motors"].as<std::vector<std::string>>();
+    Eigen::VectorXd gear_ratio = read_yaml_vector(config["gear_ratio"]);
 
     MotorPublisher<ArmStatus> pub("arm_status");
     MotorSubscriber<ArmCommand> sub("arm_command");
     MotorSubscriber<ArmCommandTrajectory> sub_trajectory("arm_command_trajectory");
 
     MotorManager m;
-    m.get_motors_by_name(motor_names);
+    m.get_motors_by_name(motor_names, true, true);
+    std::cout << m.motors().size() << std::endl;
+    // if motors are simulated set the gear ratio
+    for (int i=0;i<m.motors().size();i++) {
+        auto mot = m.motors()[i];
+        if (typeid(*(mot.get())) == typeid(SimulatedMotor)) {
+            dynamic_cast<SimulatedMotor*>(mot.get())->set_gear_ratio(gear_ratio[i]);
+        }
+    }
 
 
     auto start_time = std::chrono::steady_clock::now();
@@ -76,13 +93,7 @@ int main(int argc, char **argv) {
         if (command_trajectory.command_num) {
             position_trajectory = trajectory.get_trajectory_position(next_time);
         }
-        //std::cout << position_trajectory << std::endl;
 
-        //std::cout << model.X_base[model.mBodyNameMap[control_body]] << std::endl << std::endl;
-
-        // requires some custom logic to deal with easy control in a 5 dof arm
-        // if elevation is -90, az is in task space, else it will be just joint angle j4, az_offset is set to create no movement when transitioning 
-        // a trajectory will result in az_offset of 0 
         position_sum.x += .001*velocity.x;
         position_sum.y += .001*velocity.y;
         position_sum.z += .001*velocity.z;
@@ -95,7 +106,17 @@ int main(int argc, char **argv) {
         position.elevation = position_sum.elevation + position_trajectory.elevation;
         position.az = position_sum.az + position_trajectory.az;
 
-        auto q = arm_control.step(position);
+        auto q_arm = arm_control.step(position);
+        Eigen::VectorXd qd_arm = Eigen::VectorXd::Zero(5);
+        Eigen::VectorXd q_base = Eigen::VectorXd::Zero(2);
+        Eigen::VectorXd qd_base = Eigen::VectorXd::Zero(2);
+
+        Eigen::VectorXd q(7), qd(7);
+        q << q_base, q_arm;
+        qd << qd_base, qd_arm;
+
+        Eigen::VectorXd qm = q.cwiseProduct(gear_ratio);
+        Eigen::VectorXd qmd = qd.cwiseProduct(gear_ratio);
 
         for (int i=0; i<q.size(); i++) {
             status.command.joint_position[i] = q[i];
@@ -105,21 +126,31 @@ int main(int argc, char **argv) {
             status.measured.joint_position[i] = motor_status[i].motor_position/100;
             if(i==0) status.measured.joint_position[i] = -status.measured.joint_position[i];
         }
+        
+        // todo check this
+        std::vector<float> motor_desired(qm.data(), qm.data() + qm.size());
+        std::vector<float> velocity_desired(qmd.data(), qmd.data() + qmd.size());
 
-        std::vector<float> motor_desired(m.motors().size());
-        for (int i=0; i<m.motors().size(); i++) {
-            float tmp = status.command.joint_position[i];
-            if (i==0) tmp = M_PI/2 - tmp;
-            tmp *= 100;
-            if (fabs(tmp - motor_status[i].motor_position) < 10) {
-                motor_desired[i] = tmp;
-            } else {
-                motor_desired[i] = motor_status[i].motor_position;
-            }
-        }
-        m.set_command_mode(POSITION);
+        // for (int i=0; i<motor_desired.size(); i++) {
+        //     std::cout << motor_desired[i] << std::endl;
+        // }
+        // std::cout << std::endl;
+        // std::vector<float> motor_desired(m.motors().size());
+        // for (int i=0; i<m.motors().size(); i++) {
+        //     float tmp = status.command.joint_position[i];
+        //     if (i==0) tmp = M_PI/2 - tmp;
+        //     tmp *= 100;
+        //     if (fabs(tmp - motor_status[i].motor_position) < 10) {
+        //         motor_desired[i] = tmp;
+        //     } else {
+        //         motor_desired[i] = motor_status[i].motor_position;
+        //     }
+        // }
+
+        m.set_command_mode({VELOCITY, VELOCITY, POSITION, POSITION, POSITION, POSITION, POSITION});
         m.set_command_count(count);
         m.set_command_position(motor_desired);
+        m.set_command_velocity(velocity_desired);
         m.write_saved_commands();
 
         pub.publish(status);
