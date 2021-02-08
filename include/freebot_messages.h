@@ -41,3 +41,16 @@ struct ArmStatus {
         ArmJointPosition joint_position;
     } measured;
 };
+
+struct BaseCommand {
+    double x, az;
+};
+
+struct BaseStatus {
+    struct {
+       double wl, wr;
+    } command;
+    struct {
+       double positionl, positionr;
+    } measured;
+};

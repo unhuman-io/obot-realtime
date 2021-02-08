@@ -7,6 +7,7 @@
 
 #include <yaml-cpp/yaml.h>
 #include "freebot_arm_control.h"
+#include "freebot_base_control.h"
 
 std::ostream& operator<< (std::ostream& stream, const Position& p) {
     stream << "x: " << p.x << ", y: " << p.y << ", z: " << p.z << ", el: " << p.elevation << ", az: " << p.az;
@@ -34,13 +35,16 @@ int main(int argc, char **argv) {
     YAML::Node config = YAML::LoadFile("/home/lee/unhuman/freebot-realtime/config/param.yaml");
 
     FreebotArmControl arm_control(config["arm"]["model"].as<std::string>(), config["arm"]["control_body"].as<std::string>());
+    FreebotBaseControl base_control;
 
     auto motor_names = config["motors"].as<std::vector<std::string>>();
     Eigen::VectorXd gear_ratio = read_yaml_vector(config["gear_ratio"]);
 
-    MotorPublisher<ArmStatus> pub("arm_status");
-    MotorSubscriber<ArmCommand> sub("arm_command");
-    MotorSubscriber<ArmCommandTrajectory> sub_trajectory("arm_command_trajectory");
+    MotorPublisher<ArmStatus> arm_pub("arm_status");
+    MotorSubscriber<ArmCommand> arm_sub("arm_command");
+    MotorSubscriber<ArmCommandTrajectory> arm_sub_trajectory("arm_command_trajectory");
+    MotorPublisher<BaseStatus> base_pub("base_status");
+    MotorSubscriber<BaseCommand> base_sub("base_command");
 
     MotorManager m;
     m.get_motors_by_name(motor_names, true, true);
@@ -57,8 +61,9 @@ int main(int argc, char **argv) {
     auto start_time = std::chrono::steady_clock::now();
     auto next_time = start_time;
     int count = 0;
-    ArmStatus status = {};
-    Position &position = status.command.position;
+    ArmStatus arm_status = {};
+    BaseStatus base_status = {};
+    Position &position = arm_status.command.position;
 
     auto motor_status = m.read();
     // for (int i=0; i<motor_status.size(); i++) {
@@ -77,20 +82,22 @@ int main(int argc, char **argv) {
         m.poll();
         auto motor_status = m.read();
         //std::cout << motor_status << std::endl;
-        ArmCommand command = sub.read();        
-        Velocity &velocity = command.velocity;
-        ArmCommandTrajectory command_trajectory = sub_trajectory.read();
-        if (command_trajectory.command_num != last_command_num) {
-            last_command_num = command_trajectory.command_num;
+        ArmCommand arm_command = arm_sub.read();
+        BaseCommand base_command = base_sub.read();
+
+        Velocity &velocity = arm_command.velocity;
+        ArmCommandTrajectory arm_command_trajectory = arm_sub_trajectory.read();
+        if (arm_command_trajectory.command_num != last_command_num) {
+            last_command_num = arm_command_trajectory.command_num;
             std::cout << "trajectory " << last_command_num << " received" << std::endl;
-            trajectory.start(command_trajectory.position_trajectory, position, velocity, next_time);
+            trajectory.start(arm_command_trajectory.position_trajectory, position, velocity, next_time);
             position_sum = {};
             // for (int i=0; i<command_trajectory.position_trajectory.num_points; i++) {
             //     std::cout << command_trajectory.position_trajectory.trajectory_point[i].position << std::endl;
             // }
         }
         
-        if (command_trajectory.command_num) {
+        if (arm_command_trajectory.command_num) {
             position_trajectory = trajectory.get_trajectory_position(next_time);
         }
 
@@ -109,7 +116,7 @@ int main(int argc, char **argv) {
         auto q_arm = arm_control.step(position);
         Eigen::VectorXd qd_arm = Eigen::VectorXd::Zero(5);
         Eigen::VectorXd q_base = Eigen::VectorXd::Zero(2);
-        Eigen::VectorXd qd_base = Eigen::VectorXd::Zero(2);
+        Eigen::VectorXd qd_base = base_control.step(base_command.x, base_command.az);
 
         Eigen::VectorXd q(7), qd(7);
         q << q_base, q_arm;
@@ -119,12 +126,12 @@ int main(int argc, char **argv) {
         Eigen::VectorXd qmd = qd.cwiseProduct(gear_ratio);
 
         for (int i=0; i<q.size(); i++) {
-            status.command.joint_position[i] = q[i];
+            arm_status.command.joint_position[i] = q[i];
         }
 
         for (int i=0; i<motor_status.size(); i++) {
-            status.measured.joint_position[i] = motor_status[i].motor_position/100;
-            if(i==0) status.measured.joint_position[i] = -status.measured.joint_position[i];
+            arm_status.measured.joint_position[i] = motor_status[i].motor_position/gear_ratio[i];
+            //if(i==0) status.measured.joint_position[i] = -status.measured.joint_position[i];
         }
         
         // todo check this
@@ -153,7 +160,8 @@ int main(int argc, char **argv) {
         m.set_command_velocity(velocity_desired);
         m.write_saved_commands();
 
-        pub.publish(status);
+        arm_pub.publish(arm_status);
+        base_pub.publish(base_status);
         next_time += std::chrono::microseconds(1000);
         std::this_thread::sleep_until(next_time);
     }
