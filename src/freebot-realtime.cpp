@@ -125,14 +125,17 @@ int main(int argc, char **argv) {
         Eigen::VectorXd qm = q.cwiseProduct(gear_ratio);
         Eigen::VectorXd qmd = qd.cwiseProduct(gear_ratio);
 
-        for (int i=0; i<q.size(); i++) {
-            arm_status.command.joint_position[i] = q[i];
+        for (int i=0; i<q_arm.size(); i++) {
+            arm_status.command.joint_position[i] = q_arm[i];
         }
 
-        for (int i=0; i<motor_status.size(); i++) {
-            arm_status.measured.joint_position[i] = motor_status[i].motor_position/gear_ratio[i];
+        for (int i=2; i<motor_status.size(); i++) {
+            arm_status.measured.joint_position[i-2] = motor_status[i].motor_position/gear_ratio[i];
             //if(i==0) status.measured.joint_position[i] = -status.measured.joint_position[i];
         }
+
+        base_status.measured.positionl = motor_status[0].motor_position;
+        base_status.measured.positionr = motor_status[1].motor_position;
         
         // todo check this
         std::vector<float> motor_desired(qm.data(), qm.data() + qm.size());
