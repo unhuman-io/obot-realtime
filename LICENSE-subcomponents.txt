@@ -1,0 +1,3 @@
+freebot-realtime: [required, Unlicense, https://github.com/unhuman-io/freebot-realtime/raw/main/UNLICENSE.txt]
+    RBDL: [required, zlib, https://github.com/rbdl/rbdl/raw/master/LICENSE]
+    Eigen: [required, MPL2, https://gitlab.com/libeigen/eigen/-/raw/master/COPYING.README]
