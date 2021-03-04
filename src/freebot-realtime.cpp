@@ -30,6 +30,7 @@ Eigen::VectorXd read_yaml_vector(YAML::Node node) {
     return out;
 }
 
+bool run = true;
 
 int main(int argc, char **argv) {
     YAML::Node config = YAML::LoadFile("/home/lee/unhuman/freebot-realtime/config/param.yaml");
@@ -77,7 +78,8 @@ int main(int argc, char **argv) {
     Trajectory trajectory;
     Position position_trajectory = position;
     Position position_sum = {};
-    while(1) {
+    signal(SIGINT,[](int signum){run = 0;});
+    while(run) {
         count++;
         m.poll();
         auto motor_status = m.read();
@@ -168,6 +170,9 @@ int main(int argc, char **argv) {
         next_time += std::chrono::microseconds(1000);
         std::this_thread::sleep_until(next_time);
     }
+
+    m.set_command_mode(OPEN);
+    m.write_saved_commands;
 
     return 0;
 }
