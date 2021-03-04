@@ -4,6 +4,7 @@
 #include <iostream>
 #include "freebot_messages.h"
 #include <motor_manager.h>
+#include <signal.h>
 
 #include <yaml-cpp/yaml.h>
 #include "freebot_arm_control.h"
@@ -172,7 +173,7 @@ int main(int argc, char **argv) {
     }
 
     m.set_command_mode(OPEN);
-    m.write_saved_commands;
+    m.write_saved_commands();
 
     return 0;
 }
