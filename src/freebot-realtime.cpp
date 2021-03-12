@@ -34,7 +34,7 @@ Eigen::VectorXd read_yaml_vector(YAML::Node node) {
 bool run = true;
 
 int main(int argc, char **argv) {
-    YAML::Node config = YAML::LoadFile("/home/lee/unhuman/freebot-realtime/config/param.yaml");
+    YAML::Node config = YAML::LoadFile("/home/lee/freebot/freebot-realtime/config/param.yaml");
 
     FreebotArmControl arm_control(config["arm"]["model"].as<std::string>(), config["arm"]["control_body"].as<std::string>());
     FreebotBaseControl base_control;
@@ -75,6 +75,10 @@ int main(int argc, char **argv) {
     // }
 //    Q[3] = -M_PI/2;
 
+    Eigen::VectorXd qm_bias = Eigen::Map<Eigen::VectorXf, Eigen::Unaligned, Eigen::InnerStride<sizeof(motor_status[0])/sizeof(float)>>(&motor_status[0].motor_position,7).cast<double>();
+    std::cout << qm_bias.transpose() << std::endl;
+
+
     int last_command_num = 0;
     Trajectory trajectory;
     Position position_trajectory = position;
@@ -109,23 +113,50 @@ int main(int argc, char **argv) {
         position_sum.z += .001*velocity.z;
         position_sum.elevation += .001*velocity.elevation;
         position_sum.az += .001*velocity.az;
+        position_sum.y = std::max(std::min(position_sum.y, 1.), -2.);
+
 
         position.x = position_sum.x + position_trajectory.x;
-        position.y = position_sum.y + position_trajectory.y;
+        position.y = std::max(std::min(position_sum.y + position_trajectory.y, 1.), -2.);
         position.z = position_sum.z + position_trajectory.z;
         position.elevation = position_sum.elevation + position_trajectory.elevation;
         position.az = position_sum.az + position_trajectory.az;
 
         auto q_arm = arm_control.step(position);
         Eigen::VectorXd qd_arm = Eigen::VectorXd::Zero(5);
+        q_arm[0] = position.y;
+        qd_arm[0] = velocity.y;
         Eigen::VectorXd q_base = Eigen::VectorXd::Zero(2);
         Eigen::VectorXd qd_base = base_control.step(base_command.x, base_command.az);
+
+        Eigen::VectorXd q_max(5);
+        q_max << 1, 0, 0, 0, 0;
+        Eigen::VectorXd q_min(5);
+        q_min << -2, 0, 0, 0, 0;
+
+        auto in_limits = q_arm.array() >= q_max.array() || q_arm.array() <= q_min.array();
+        auto q_limit = q_arm.array().max(q_min.array()).min(q_max.array());
+        Eigen::Matrix<uint8_t, 5, 1> limit_command_eigen;
+        limit_command_eigen = in_limits.unaryExpr([](bool b) { return static_cast<uint8_t>(b ? POSITION : POSITION); });
+        qd_arm = in_limits.select(0, qd_arm);
+        std::vector<uint8_t> limit_command(limit_command_eigen.data(), limit_command_eigen.data()+limit_command_eigen.size());
+        // for(int i=0; i<limit_command.size(); i++) {
+        //     std::cout << +limit_command[i] << ": " << q_limit[i] << ", ";
+        // }
+        q_arm = q_limit;
+
+        //std::cout << q_arm[0] << " " << qd_arm[0] << std::endl;
+
+        //std::cout << std::endl;
+        std::vector<uint8_t> mode_command(2, VELOCITY);
+        mode_command.insert(mode_command.end(), limit_command.begin(), limit_command.end());
+
 
         Eigen::VectorXd q(7), qd(7);
         q << q_base, q_arm;
         qd << qd_base, qd_arm;
 
-        Eigen::VectorXd qm = q.cwiseProduct(gear_ratio);
+        Eigen::VectorXd qm = q.cwiseProduct(gear_ratio) + qm_bias;
         Eigen::VectorXd qmd = qd.cwiseProduct(gear_ratio);
 
         for (int i=0; i<q_arm.size(); i++) {
@@ -160,7 +191,8 @@ int main(int argc, char **argv) {
         //     }
         // }
 
-        m.set_command_mode({VELOCITY, VELOCITY, POSITION, POSITION, POSITION, POSITION, POSITION});
+        //m.set_command_mode({VELOCITY, VELOCITY, POSITION, POSITION, POSITION, POSITION, POSITION});
+        m.set_command_mode(mode_command);
         m.set_command_count(count);
         m.set_command_position(motor_desired);
         m.set_command_velocity(velocity_desired);

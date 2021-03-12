@@ -1,5 +1,5 @@
 arm:
   model: /home/lee/unhuman/catkin-ws/src/unhuman-urdf/freebot_urdf_description/urdf/freebot_urdf.urdf
   control_body: /OS_Tool_Adapter_1
-motors: ["wl", "wr", "j1", "j2", "j3", "j4", "j5"]
+motors: ["wl", "wr", "J1", "j2", "j3", "j4", "j5"]
 gear_ratio: [1, 1, 100, 100, 100, 100, 100]
