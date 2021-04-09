@@ -36,7 +36,8 @@ bool run = true;
 int main(int argc, char **argv) {
     YAML::Node config = YAML::LoadFile("/home/lee/freebot/freebot-realtime/config/param.yaml");
 
-    FreebotArmControl arm_control(config["arm"]["model"].as<std::string>(), config["arm"]["control_body"].as<std::string>());
+    //FreebotArmIKControl arm_control(config["arm"]["model"].as<std::string>(), config["arm"]["control_body"].as<std::string>());
+    FreebotArmIKAnalyticControl arm_control(.5, .5);
     FreebotBaseControl base_control;
 
     auto motor_names = config["motors"].as<std::vector<std::string>>();

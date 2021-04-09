@@ -12,7 +12,7 @@ void transform_to_position(const RigidBodyDynamics::Math::SpatialTransform &tran
     position->az = euler[2];
 }
 
-FreebotArmControl::FreebotArmControl(std::string model_urdf_file, std::string control_body_name) {
+FreebotArmIKControl::FreebotArmIKControl(std::string model_urdf_file, std::string control_body_name) {
     rbdl_check_api_version(RBDL_API_VERSION);
 
     if (!RigidBodyDynamics::Addons::URDFReadFromFile (model_urdf_file.c_str(), &model_, false)) {
@@ -31,10 +31,8 @@ FreebotArmControl::FreebotArmControl(std::string model_urdf_file, std::string co
     //std::cout << q_ << std::endl;
 }
 
-void FreebotArmControl::init(Eigen::VectorXd q) {
-    q_ = q;
-    qd_ = RigidBodyDynamics::Math::VectorNd::Zero(model_.q_size);
-    qdd_ = RigidBodyDynamics::Math::VectorNd::Zero(model_.q_size);
+void FreebotArmIKControl::init(Eigen::VectorXd q) {
+    FreebotArmControl::init(q);
     UpdateKinematics(model_, q_, qd_, qdd_);
     transform_to_position(model_.X_base[control_body_id_], &current_model_position_);
 }
@@ -43,7 +41,7 @@ void FreebotArmControl::init(Eigen::VectorXd q) {
 // requires some custom logic to deal with easy control in a 5 dof arm
 // if elevation is -90, az is in task space, else it will be just joint angle j4, az_offset is set to create no movement when transitioning 
 // a trajectory will result in az_offset of 0 
-Eigen::VectorXd FreebotArmControl::step(Position desired_position) {
+Eigen::VectorXd FreebotArmIKControl::step(Position desired_position) {
     UpdateKinematics(model_, q_, qd_, qdd_);
     transform_to_position(model_.X_base[control_body_id_], &current_model_position_);
     Eigen::VectorXd dx(6);
