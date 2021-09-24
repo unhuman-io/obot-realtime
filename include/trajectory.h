@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 
 double sign(double d) {
@@ -144,7 +145,7 @@ TrajectoryState get_trajectory_values(const TrajectoryCoeffs &c, double t) {
         s.v = c.v0 + c.a1*c.t1;
     } else {
         s.x = c.p0 + c.v0*c.t1 + .5*c.a1*c.t1*c.t1 + (c.v0 + c.a1*c.t1)*(t-c.t1) + .5*c.a2*(t-c.t2)*(t-c.t2);
-        s.v = c.v0 + c.a1*c.t1 - c.a2*(t-c.t2);
+        s.v = c.v0 + c.a1*c.t1 + c.a2*(t-c.t2);
     }
     return s;
 }
@@ -233,5 +234,37 @@ class Trajectory {
         return s;
     }
 
+    std::chrono::time_point<std::chrono::steady_clock> time_start_;
+};
+
+class SimpleTrajectory {
+ public:
+    SimpleTrajectory() {}
+    void start(const double position , const double position_desired, const double velocity, 
+        const double velocity_desired, const std::chrono::time_point<std::chrono::steady_clock> &time) {
+        calculate_coeffs(position, position_desired, velocity, velocity_desired);
+        time_start_ = time;
+    }
+
+    double get_trajectory_position(const std::chrono::time_point<std::chrono::steady_clock> &time) {
+        auto t = trajectory_time(time);
+        auto s = get_trajectory_values(coeffs_, t);
+        return s.x;
+    }
+    double get_trajectory_velocity(const std::chrono::time_point<std::chrono::steady_clock> &time) {
+        auto t = trajectory_time(time);
+        auto s = get_trajectory_values(coeffs_, t);
+        return s.v;
+    }
+    double trajectory_time(const std::chrono::time_point<std::chrono::steady_clock> &time) {
+        std::chrono::duration<double> seconds = time - time_start_;
+        return seconds.count();
+    }
+ private:
+    TrajectoryCoeffs coeffs_;
+    void calculate_coeffs(const double position, const double velocity, 
+                    const double position_desired, const double velocity_desired) {
+        coeffs_ = calc_trapezoidal_coeffs(position, position_desired, 20, velocity, velocity_desired, 100);
+    }
     std::chrono::time_point<std::chrono::steady_clock> time_start_;
 };
