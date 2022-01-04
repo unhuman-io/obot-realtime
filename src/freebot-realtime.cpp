@@ -116,7 +116,11 @@ class MotorAppFreebot : public MotorApp {
 
 int main (int argc, char **argv)
 {	
-    config = YAML::LoadFile("/home/lee/freebot/freebot-realtime/config/param.yaml");
+    if (argc != 2) {
+        std::cout << "Usage " << argv[0] << " PARAM.yaml" << std::endl;
+        return 1;
+    }
+    config = YAML::LoadFile(argv[1]);
     gear_ratio = read_yaml_vector(config["gear_ratio"]);
 	Task task(1000);
 	auto app = MotorAppFreebot(argc, argv, &task);

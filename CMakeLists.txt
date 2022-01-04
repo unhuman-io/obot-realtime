@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 11)
 option(ENABLE_GTEST "enable gtest" ON)
 
 if(${CMAKE_VERSION} VERSION_LESS "3.14.0")
-	message("cmake version to low for gtest")
+	message("cmake version too low for gtest")
 	set(ENABLE_GTEST OFF)
 endif()
 
