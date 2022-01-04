@@ -1,0 +1,35 @@
+name: C/C++ CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@master
+      with:
+        submodules: true
+        fetch-depth: 0
+    - name: install libudev-dev eigen
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libudev-dev libeigen3-dev git
+    - name: make RBDL
+      run: |
+        git clone --depth 1 https://github.com/rbdl/rbdl
+        pushd rbdl
+        cmake -DRBDL_BUILD_ADDON_URDFREADER=ON -DRBDL_USE_ROS_URDF_LIBRARY=OFF -DCMAKE_INSTALL_PREFIX=artifacts .
+        make -j2
+        make install
+        popd
+    - name: cmake
+      run: cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=artifacts -DRBDL_PATH=rbdl/artifacts .
+    - name: make
+      run: make VERBOSE=1 -j2
+    - name: make install
+      run: make install
+    - name: Archive production artifacts2
+      uses: actions/upload-artifact@v1
+      with:
+        name: artifacts
+        path: artifacts
