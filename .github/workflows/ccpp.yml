@@ -13,15 +13,20 @@ jobs:
     - name: install libudev-dev eigen
       run: |
         sudo apt-get update
-        sudo apt-get install -y libudev-dev libeigen3-dev git
+        sudo apt-get install -y libudev-dev libeigen3-dev libyaml-cpp-dev git
     - name: make RBDL
       run: |
-        git clone --depth 1 https://github.com/rbdl/rbdl
-        pushd rbdl
+        git clone https://github.com/rbdl/rbdl
+        cd rbdl
+        git checkout 92e67e9f752c9533f6dcbb6892f3fcf5564bb09d
         cmake -DRBDL_BUILD_ADDON_URDFREADER=ON -DRBDL_USE_ROS_URDF_LIBRARY=OFF -DCMAKE_INSTALL_PREFIX=artifacts .
         make -j2
         make install
-        popd
+    - name: install freebot
+      run: |
+        curl https://raw.githubusercontent.com/unhuman-io/obot/main/install-freebot.sh > install-freebot.sh
+        chmod +x install-freebot.sh
+        ./install-freebot.sh --no-driver
     - name: cmake
       run: cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=artifacts -DRBDL_PATH=rbdl/artifacts .
     - name: make
