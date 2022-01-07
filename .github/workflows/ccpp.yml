@@ -31,6 +31,8 @@ jobs:
       run: cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=artifacts -DRBDL_PATH=rbdl/artifacts .
     - name: make
       run: make VERBOSE=1 -j2
+    - name: test
+      run: make test
     - name: make install
       run: make install
     - name: Archive production artifacts2
