@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(freebot-realtime)
+project(obot-realtime)
 enable_testing()
 
 set(CMAKE_CXX_STANDARD 11)

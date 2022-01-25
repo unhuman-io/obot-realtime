@@ -2,13 +2,13 @@
 #include <motor_publisher.h>
 #include <thread>
 #include <iostream>
-#include "freebot_messages.h"
+#include "obot_messages.h"
 #include <motor_manager.h>
 #include <signal.h>
 
 #include <yaml-cpp/yaml.h>
-#include "freebot_arm_control.h"
-#include "freebot_base_control.h"
+#include "obot_arm_control.h"
+#include "obot_base_control.h"
 #include "motor_app.h"
 #include "motor_thread.h"
 #include <motor_chain_messages.h>
@@ -76,14 +76,14 @@ class Task : public MotorThread {
     MotorSubscriber<BaseCommand> base_sub_{"base_command"};
     BaseStatus base_status_ = {};
     BaseCommand base_command_ = {};
-    FreebotBaseControl base_control_;
+    ObotBaseControl base_control_;
 
     int count_ = 0;
 };
 
-class MotorAppFreebot : public MotorApp {
+class MotorAppObot : public MotorApp {
  public:
-    MotorAppFreebot(int argc, char **argv, MotorThread *motor_thread, YAML::Node &config) : 
+    MotorAppObot(int argc, char **argv, MotorThread *motor_thread, YAML::Node &config) : 
         config_(config),
         MotorApp(argc, argv, motor_thread) {}
     virtual void select_motors(MotorManager *m) {
@@ -111,6 +111,6 @@ int main (int argc, char **argv)
     YAML::Node config = YAML::LoadFile(argv[1]);
     gear_ratio = read_yaml_vector(config["gear_ratio"]);
 	Task task(config);
-	auto app = MotorAppFreebot(argc, argv, &task, config);
+	auto app = MotorAppObot(argc, argv, &task, config);
 	return app.run();
 }

@@ -1,11 +1,11 @@
 #pragma once
-#include "freebot_messages.h"
+#include "obot_messages.h"
 #include <rbdl/rbdl.h>
 #include <string>
 
-class FreebotArmControl {
+class ObotArmControl {
  public:
-    FreebotArmControl() {}
+    ObotArmControl() {}
     virtual void init(Eigen::VectorXd q) {
       q_ = q;
       qd_ = Eigen::VectorXd::Zero(q.size());
@@ -19,9 +19,9 @@ class FreebotArmControl {
     unsigned int control_body_id_;
 };
 
-class FreebotArmIKControl : public FreebotArmControl {
+class ObotArmIKControl : public ObotArmControl {
  public:
-    FreebotArmIKControl(std::string model_urdf_file, std::string control_body_name);
+    ObotArmIKControl(std::string model_urdf_file, std::string control_body_name);
     virtual void init(Eigen::VectorXd q);
     virtual Eigen::VectorXd step(Position desired_position);
 
@@ -31,9 +31,9 @@ class FreebotArmIKControl : public FreebotArmControl {
     unsigned int control_body_id_;
 };
 
-class FreebotArmIKAnalyticControl : public FreebotArmControl {
+class ObotArmIKAnalyticControl : public ObotArmControl {
  public:
-   FreebotArmIKAnalyticControl(double l1, double l2);
+   ObotArmIKAnalyticControl(double l1, double l2);
    virtual Eigen::VectorXd step(Position desired_position);
  protected:
    double l1_, l2_;

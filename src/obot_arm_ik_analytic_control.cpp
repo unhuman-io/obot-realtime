@@ -1,13 +1,13 @@
-#include "freebot_arm_control.h"
+#include "obot_arm_control.h"
 #include <stdexcept>
 #include <rbdl/rbdl_utils.h>
 #include <rbdl/addons/urdfreader/urdfreader.h>
 
-FreebotArmIKAnalyticControl::FreebotArmIKAnalyticControl(double l1, double l2)
+ObotArmIKAnalyticControl::ObotArmIKAnalyticControl(double l1, double l2)
     : l1_(l1), l2_(l2) {
 }
 
-Eigen::VectorXd FreebotArmIKAnalyticControl::step(Position desired_position) {
+Eigen::VectorXd ObotArmIKAnalyticControl::step(Position desired_position) {
     double &x = desired_position.x;
     double &y = desired_position.y;
 

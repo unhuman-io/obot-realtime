@@ -12,7 +12,7 @@ bool run = true;
 
 int main(int argc, char **argv) {
     if(argc != 2) {
-        std::cout << "Usage freebot-test param.yaml" << std::endl;
+        std::cout << "Usage obot-test param.yaml" << std::endl;
         exit(1);
     }
     YAML::Node config = YAML::LoadFile(argv[1]);

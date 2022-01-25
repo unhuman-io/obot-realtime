@@ -1,12 +1,12 @@
 #pragma once
-#include "freebot_messages.h"
+#include "obot_messages.h"
 #include "Eigen/Dense"
 #include <string>
 #include <motor_chain_messages.h>
 
-class FreebotBaseControl {
+class ObotBaseControl {
  public:
-    FreebotBaseControl() {}
+    ObotBaseControl() {}
     
     // Input BaseCommand and MotorChainStatus, returns BaseStatus and MotorChainCommand
     void step(const BaseCommand &c, const MotorChainStatus &ms, 

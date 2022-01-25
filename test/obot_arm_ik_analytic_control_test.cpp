@@ -1,11 +1,11 @@
 #include <gtest/gtest.h>
-#include "freebot_arm_control.h"
+#include "obot_arm_control.h"
 #include <iostream>
 
 TEST(IKAnalyticTest, Basic) {
     double l1 = .5;
     double l2 = .6;
-    FreebotArmIKAnalyticControl c(l1, l2);
+    ObotArmIKAnalyticControl c(l1, l2);
     Eigen::VectorXd q = Eigen::VectorXd::Zero(5);
     c.init(q);
     for (double q1=-M_PI*.9; q1<M_PI*.9; q1+=.1) {

@@ -22,11 +22,11 @@ jobs:
         cmake -DRBDL_BUILD_ADDON_URDFREADER=ON -DRBDL_USE_ROS_URDF_LIBRARY=OFF -DCMAKE_INSTALL_PREFIX=artifacts .
         make -j2
         make install
-    - name: install freebot
+    - name: install obot
       run: |
-        curl https://raw.githubusercontent.com/unhuman-io/obot/main/install-freebot.sh > install-freebot.sh
-        chmod +x install-freebot.sh
-        ./install-freebot.sh --no-driver
+        curl https://raw.githubusercontent.com/unhuman-io/obot/main/install-obot.sh > install-obot.sh
+        chmod +x install-obot.sh
+        ./install-obot.sh --no-driver
     - name: cmake
       run: cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=artifacts -DRBDL_PATH=rbdl/artifacts .
     - name: make

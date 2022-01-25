@@ -1,6 +1,6 @@
 #add_test(NAME ik_analytic COMMAND test)
 
-function(freebot_test name)
+function(obot_test name)
     add_executable(
         ${name}_test
         ${name}_test.cpp
@@ -15,4 +15,4 @@ function(freebot_test name)
 endfunction()
 
 include(GoogleTest)
-freebot_test(freebot_arm_ik_analytic_control)
+obot_test(obot_arm_ik_analytic_control)
