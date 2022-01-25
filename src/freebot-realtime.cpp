@@ -11,6 +11,7 @@
 #include "freebot_base_control.h"
 #include "motor_app.h"
 #include "motor_thread.h"
+#include <motor_chain_messages.h>
 
 std::ostream& operator<< (std::ostream& stream, const Position& p) {
     stream << "x: " << p.x << ", y: " << p.y << ", z: " << p.z << ", el: " << p.elevation << ", az: " << p.az;
@@ -33,12 +34,11 @@ Eigen::VectorXd read_yaml_vector(YAML::Node node) {
     return out;
 }
 
-static YAML::Node config;
 static Eigen::VectorXd gear_ratio;
 
 class Task : public MotorThread {
  public:
-  Task(int frequency) : MotorThread(frequency) {
+  Task(YAML::Node &config) : MotorThread(config["frequency"].as<int>()) {
   }
  protected:
 	virtual void post_init() {
@@ -50,31 +50,16 @@ class Task : public MotorThread {
 
     virtual void controller_update() {
         count_++;
-        std::vector<MotorStatus> motor_status(data_.statuses, data_.statuses + motor_manager_.motors().size());
+        MotorStatus *motor_status = data_.statuses;
+        auto &motor_commands = motor_manager_.commands();
+        MotorChainStatus base_motor_status(motor_status, 2);
+        MotorChainCommand base_motor_command(motor_commands.data(), 2);
 
-        Eigen::VectorXd q_base = Eigen::VectorXd::Zero(2);
-        Eigen::VectorXd qd_base = base_control_.step(base_command_.x, base_command_.az);
-
-        std::vector<uint8_t> mode_command(2, VELOCITY);
-
-        Eigen::VectorXd q(2), qd(2);
-        q << q_base;
-        qd << qd_base;
-
-        Eigen::VectorXd qm(2), qmd(2);
-        qm = q.cwiseProduct(gear_ratio.block(0,0,1,2));
-        qmd = qd.cwiseProduct(gear_ratio.block(0,0,1,2));
-
+        base_control_.step(base_command_, base_motor_status, &base_status_, &base_motor_command);
         base_status_.measured.positionl = motor_status[0].motor_position;
         base_status_.measured.positionr = motor_status[1].motor_position;
-        
-        std::vector<float> motor_desired(qm.data(), qm.data() + qm.size());
-        std::vector<float> velocity_desired(qmd.data(), qmd.data() + qmd.size());
 
-        motor_manager_.set_command_mode(mode_command);
         motor_manager_.set_command_count(count_);
-        motor_manager_.set_command_position(motor_desired);
-        motor_manager_.set_command_velocity(velocity_desired);
     }
 
     virtual void post_update() {
@@ -98,10 +83,11 @@ class Task : public MotorThread {
 
 class MotorAppFreebot : public MotorApp {
  public:
-    MotorAppFreebot(int argc, char **argv, MotorThread *motor_thread) : 
+    MotorAppFreebot(int argc, char **argv, MotorThread *motor_thread, YAML::Node &config) : 
+        config_(config),
         MotorApp(argc, argv, motor_thread) {}
     virtual void select_motors(MotorManager *m) {
-        auto motor_names = config["motors"].as<std::vector<std::string>>();   
+        auto motor_names = config_["motors"].as<std::vector<std::string>>();   
         m->get_motors_by_name(motor_names, true, true);
         std::cout << m->motors().size() << std::endl;
         // if motors are simulated set the gear ratio
@@ -112,6 +98,8 @@ class MotorAppFreebot : public MotorApp {
             }
         }
     }
+ private:
+    YAML::Node &config_;
 };
 
 int main (int argc, char **argv)
@@ -120,9 +108,9 @@ int main (int argc, char **argv)
         std::cout << "Usage " << argv[0] << " PARAM.yaml" << std::endl;
         return 1;
     }
-    config = YAML::LoadFile(argv[1]);
+    YAML::Node config = YAML::LoadFile(argv[1]);
     gear_ratio = read_yaml_vector(config["gear_ratio"]);
-	Task task(1000);
-	auto app = MotorAppFreebot(argc, argv, &task);
+	Task task(config);
+	auto app = MotorAppFreebot(argc, argv, &task, config);
 	return app.run();
 }

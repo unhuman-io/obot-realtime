@@ -1,9 +1,11 @@
 #include "freebot_base_control.h"
 
-
-
-Eigen::Vector2d FreebotBaseControl::step(double x, double az) {
+void FreebotBaseControl::step(const BaseCommand &c, const MotorChainStatus &ms, 
+    BaseStatus *s, MotorChainCommand *mc) {
     Eigen::Vector2d out;
-    out << x-az, x+az;
-    return out;
+    out << c.x-c.az, c.x+c.az;
+    s->command.wl = out[0];
+    s->command.wr = out[1];
+    mc->velocity_desired() = out.cast<float>();
+    mc->mode_desired().array() = VELOCITY;
 }
